@@ -31,34 +31,53 @@ const Dashboard = () => {
   const [issues, setIssues] = useState<any[]>([]);
   const [loadingIssues, setLoadingIssues] = useState(true);
 
+  const loadIssues = async (showLoading = true) => {
+    if (showLoading) setLoadingIssues(true);
+    const { data, error } = await supabase
+      .from("issues")
+      .select("id, title, description, category, location_text, priority, status, created_at, reporter_name, photos")
+      .order("created_at", { ascending: false });
+    
+    if (error) {
+      console.error("Failed to load issues", error);
+      setIssues([]);
+    } else {
+      const mapped = (data || []).map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        category: row.category || "Other",
+        status: (row.priority || "low") as "urgent" | "high" | "medium" | "low",
+        location: row.location_text || "",
+        description: row.description || "",
+        urgencyScore: row.priority === "urgent" ? 90 : row.priority === "high" ? 75 : row.priority === "medium" ? 50 : 25,
+        createdAt: row.created_at,
+        reportedBy: row.reporter_name || "Anonymous",
+        photos: Array.isArray(row.photos) ? row.photos : (row.photos ? [row.photos] : []),
+      }));
+      setIssues(mapped);
+    }
+    setLoadingIssues(false);
+  };
+
   useEffect(() => {
-    const loadIssues = async () => {
-      setLoadingIssues(true);
-      const { data, error } = await supabase
-        .from("issues")
-        .select("id, title, description, category, location_text, priority, status, created_at, reporter_name, photos")
-        .order("created_at", { ascending: false });
-      if (error) {
-        console.error("Failed to load issues", error);
-        setIssues([]);
-      } else {
-        const mapped = (data || []).map((row: any) => ({
-          id: row.id,
-          title: row.title,
-          category: row.category || "Other",
-          status: (row.priority || "low") as "urgent" | "high" | "medium" | "low",
-          location: row.location_text || "",
-          description: row.description || "",
-          urgencyScore: row.priority === "urgent" ? 90 : row.priority === "high" ? 75 : row.priority === "medium" ? 50 : 25,
-          createdAt: row.created_at,
-          reportedBy: row.reporter_name || "Anonymous",
-          photos: Array.isArray(row.photos) ? row.photos : (row.photos ? [row.photos] : []),
-        }));
-        setIssues(mapped);
-      }
-      setLoadingIssues(false);
-    };
     loadIssues();
+
+    // Set up Realtime Subscription
+    const channel = supabase
+      .channel('public:issues')
+      .on(
+        'postgres_changes',
+        { event: '*', table: 'issues', schema: 'public' },
+        () => {
+          console.log('Realtime update received');
+          loadIssues(false); // Update without showing the heavy loader again
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const uniqueCities = Array.from(new Set(issues.map(issue => {
@@ -308,47 +327,58 @@ const Dashboard = () => {
           </div>
           
           <div className="divide-y divide-gray-200 dark:divide-gray-800">
-            {filteredIssues.map((issue) => (
-              <div
-                key={issue.id}
-                onClick={() => {
-                  setSelectedIssue(issue);
-                  setHighlightedIssueId(issue.id);
-                }}
-                className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                  highlightedIssueId === issue.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                }`}
-              >
-                <div className="flex items-start space-x-3">
-                  <div 
-                    className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
-                      issue.status === 'urgent' ? 'bg-red-500' :
-                      issue.status === 'high' ? 'bg-orange-500' :
-                      issue.status === 'medium' ? 'bg-yellow-500' :
-                      'bg-green-500'
-                    }`}
-                  >
-                    {issue.title.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <p className={`font-black text-sm truncate ${
-                        highlightedIssueId === issue.id ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'
-                      }`}>
-                        {issue.title}
-                      </p>
-                      <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 ml-2 whitespace-nowrap bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
-                        {new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </span>
+            {loadingIssues ? (
+              <div className="p-8 flex flex-col items-center justify-center space-y-4">
+                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Fetching Intel...</p>
+              </div>
+            ) : filteredIssues.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="text-sm font-bold text-gray-400">No issues found matching filters.</p>
+              </div>
+            ) : (
+              filteredIssues.map((issue) => (
+                <div
+                  key={issue.id}
+                  onClick={() => {
+                    setSelectedIssue(issue);
+                    setHighlightedIssueId(issue.id);
+                  }}
+                  className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                    highlightedIssueId === issue.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                  }`}
+                >
+                  <div className="flex items-start space-x-3">
+                    <div 
+                      className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                        issue.status === 'urgent' ? 'bg-red-500' :
+                        issue.status === 'high' ? 'bg-orange-500' :
+                        issue.status === 'medium' ? 'bg-yellow-500' :
+                        'bg-green-500'
+                      }`}
+                    >
+                      {issue.title.charAt(0)}
                     </div>
-                    <p className="text-[11px] font-bold text-gray-600 dark:text-gray-300 truncate flex items-center mt-1">
-                      <MapPin className="w-3.5 h-3.5 mr-1 text-blue-500" />
-                      {issue.location}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className={`font-black text-sm truncate ${
+                          highlightedIssueId === issue.id ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'
+                        }`}>
+                          {issue.title}
+                        </p>
+                        <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 ml-2 whitespace-nowrap bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
+                          {new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                      <p className="text-[11px] font-bold text-gray-600 dark:text-gray-300 truncate flex items-center mt-1">
+                        <MapPin className="w-3.5 h-3.5 mr-1 text-blue-500" />
+                        {issue.location}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 

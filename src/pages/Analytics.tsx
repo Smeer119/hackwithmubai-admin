@@ -12,14 +12,48 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { supabase } from "@/lib/supabaseClient";
+import { formatDistanceToNow } from "date-fns";
 
 const Analytics = () => {
   const [mounted, setMounted] = useState(false);
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'year'>('week');
+  const [liveIssues, setLiveIssues] = useState<any[]>([]);
+  const [loadingLive, setLoadingLive] = useState(true);
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const fetchLiveIssues = async () => {
+    setLoadingLive(true);
+    const { data, error } = await supabase
+      .from("issues")
+      .select("id, title, location_text, created_at, category")
+      .order("created_at", { ascending: false })
+      .limit(4);
+    
+    if (!error && data) {
+      setLiveIssues(data);
+    }
+    setLoadingLive(false);
+  };
 
   useEffect(() => {
     setMounted(true);
+    fetchLiveIssues();
+
+    const channel = supabase
+      .channel('analytics:issues')
+      .on(
+        'postgres_changes',
+        { event: '*', table: 'issues', schema: 'public' },
+        () => {
+          fetchLiveIssues();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Timeframe-specific data
@@ -359,25 +393,33 @@ const Analytics = () => {
                 </div>
               </div>
               <div className="space-y-8 flex-1">
-                {[
-                  { title: "Grid Restoration", time: "2m ago", loc: "Gokak Central", type: "Utility", color: "bg-blue-600" },
-                  { title: "Roadwork Update", time: "18m ago", loc: "Park Circle", type: "Roads", color: "bg-orange-500" },
-                  { title: "Sanitation Logic", time: "42m ago", loc: "Bengaluru West", type: "Health", color: "bg-emerald-500" },
-                  { title: "Safety Protocol", time: "1h ago", loc: "Old Delhi", type: "Police", color: "bg-indigo-600" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center space-x-5 group cursor-pointer">
-                    <div className={`w-12 h-12 rounded-2xl ${item.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-all duration-300`}>
-                        <MessageSquare className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-black text-slate-800 truncate leading-none mb-1.5">{item.title}</h4>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
-                        <MapPin className="w-3 h-3 mr-1" />
-                        {item.loc} • {item.time}
-                      </p>
-                    </div>
+                {loadingLive ? (
+                  <div className="flex flex-col items-center justify-center py-10 space-y-4">
+                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Syncing Feed...</p>
                   </div>
-                ))}
+                ) : liveIssues.length === 0 ? (
+                  <div className="text-center py-10">
+                    <p className="text-xs font-bold text-slate-400">No recent activity detected.</p>
+                  </div>
+                ) : (
+                  liveIssues.map((item, i) => (
+                    <div key={item.id} className="flex items-center space-x-5 group cursor-pointer hover:bg-slate-50 p-2 -m-2 rounded-2xl transition-all">
+                      <div className={`w-12 h-12 rounded-2xl ${
+                        i % 2 === 0 ? 'bg-blue-600' : 'bg-cyan-600'
+                      } flex items-center justify-center shadow-lg group-hover:scale-110 transition-all duration-300`}>
+                          <MessageSquare className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-black text-slate-800 truncate leading-none mb-1.5">{item.title}</h4>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+                          <MapPin className="w-3 h-3 mr-1" />
+                          {item.location_text || "Unknown Location"} • {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
              
             </Card>
