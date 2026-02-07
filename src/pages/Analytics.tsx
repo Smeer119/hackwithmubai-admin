@@ -1,331 +1,388 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useRef } from "react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Navigation from "@/components/Navigation";
-import StatsCard from "@/components/StatsCard";
-import { BarChart3, TrendingUp, Calendar, Download, AlertTriangle, Users, Clock, MapPin } from "lucide-react";
+import { 
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
+} from "recharts";
+import { 
+  TrendingUp, Calendar, Download, AlertTriangle, 
+  Users, Clock, MapPin, Activity, ShieldCheck, Zap, MoreHorizontal, MessageSquare
+} from "lucide-react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 const Analytics = () => {
-  // Mock data for charts - in real app this would come from Chart.js integration
-  const mockChartData = {
-    issuesByCategory: [
-      { category: "Infrastructure", count: 245, percentage: 35 },
-      { category: "Utilities", count: 189, percentage: 27 },
-      { category: "Public Safety", count: 124, percentage: 18 },
-      { category: "Environment", count: 87, percentage: 12 },
-      { category: "Other", count: 55, percentage: 8 },
-    ],
-    trendsData: [
-      { month: "Jan", reported: 156, resolved: 134 },
-      { month: "Feb", reported: 189, resolved: 167 },
-      { month: "Mar", reported: 234, resolved: 201 },
-      { month: "Apr", reported: 198, resolved: 187 },
-      { month: "May", reported: 276, resolved: 249 },
-      { month: "Jun", reported: 312, resolved: 298 },
-    ],
+  const [mounted, setMounted] = useState(false);
+  const [timeframe, setTimeframe] = useState<'week' | 'month' | 'year'>('week');
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Timeframe-specific data
+  const dataMap = {
+    week: {
+      line: [
+        { name: "Mon", issues: 45, resolved: 32 },
+        { name: "Tue", issues: 52, resolved: 45 },
+        { name: "Wed", issues: 48, resolved: 50 },
+        { name: "Thu", issues: 70, resolved: 55 },
+        { name: "Fri", issues: 61, resolved: 58 },
+        { name: "Sat", issues: 38, resolved: 35 },
+        { name: "Sun", issues: 42, resolved: 40 },
+      ],
+      bar: [
+        { name: "Gokak", count: 85 },
+        { name: "Bengaluru", count: 120 },
+        { name: "Delhi", count: 95 },
+        { name: "Mumbai", count: 110 },
+        { name: "Pune", count: 70 },
+      ],
+      metrics: [
+        { title: "Resolution Rate", value: "92.4%", change: "+5.2%", icon: TrendingUp, color: "text-blue-600", bg: "bg-blue-50" },
+        { title: "Avg. TAT", value: "3.2 Days", change: "-12%", icon: Clock, color: "text-orange-600", bg: "bg-orange-50" },
+        { title: "Active Reports", value: "1,280", change: "+18%", icon: Activity, color: "text-cyan-600", bg: "bg-cyan-50" },
+        { title: "Success Score", value: "4.8/5", change: "+0.3", icon: Zap, color: "text-emerald-600", bg: "bg-emerald-50" },
+      ]
+    },
+    month: {
+      line: [
+        { name: "Week 1", issues: 210, resolved: 180 },
+        { name: "Week 2", issues: 245, resolved: 210 },
+        { name: "Week 3", issues: 190, resolved: 205 },
+        { name: "Week 4", issues: 310, resolved: 275 },
+      ],
+      bar: [
+        { name: "Gokak", count: 320 },
+        { name: "Bengaluru", count: 450 },
+        { name: "Delhi", count: 380 },
+        { name: "Mumbai", count: 410 },
+        { name: "Pune", count: 290 },
+      ],
+      metrics: [
+        { title: "Resolution Rate", value: "88.1%", change: "+2.1%", icon: TrendingUp, color: "text-blue-600", bg: "bg-blue-50" },
+        { title: "Avg. TAT", value: "4.1 Days", change: "-5%", icon: Clock, color: "text-orange-600", bg: "bg-orange-50" },
+        { title: "Active Reports", value: "5,420", change: "+24%", icon: Activity, color: "text-cyan-600", bg: "bg-cyan-50" },
+        { title: "Success Score", value: "4.6/5", change: "+0.1", icon: Zap, color: "text-emerald-600", bg: "bg-emerald-50" },
+      ]
+    },
+    year: {
+      line: [
+        { name: "Q1", issues: 950, resolved: 880 },
+        { name: "Q2", issues: 1200, resolved: 1100 },
+        { name: "Q3", issues: 1100, resolved: 1050 },
+        { name: "Q4", issues: 1540, resolved: 1420 },
+      ],
+      bar: [
+        { name: "Gokak", count: 2100 },
+        { name: "Bengaluru", count: 4500 },
+        { name: "Delhi", count: 3800 },
+        { name: "Mumbai", count: 4200 },
+        { name: "Pune", count: 2800 },
+      ],
+      metrics: [
+        { title: "Resolution Rate", value: "85.4%", change: "-1.2%", icon: TrendingUp, color: "text-blue-600", bg: "bg-blue-50" },
+        { title: "Avg. TAT", value: "5.5 Days", change: "+8%", icon: Clock, color: "text-orange-600", bg: "bg-orange-50" },
+        { title: "Active Reports", value: "62.4k", change: "+42%", icon: Activity, color: "text-cyan-600", bg: "bg-cyan-50" },
+        { title: "Success Score", value: "4.5/5", change: "-0.2", icon: Zap, color: "text-emerald-600", bg: "bg-emerald-50" },
+      ]
+    }
   };
 
+  const currentData = dataMap[timeframe];
+
+  const pieData = [
+    { name: "Infrastructure", value: 35, color: "#2563eb" },
+    { name: "Utilities", value: 25, color: "#0891b2" },
+    { name: "Safety", value: 20, color: "#ea580c" },
+    { name: "Other", value: 20, color: "#16a34a" },
+  ];
+
+  const handleExportPDF = async () => {
+    if (!reportRef.current) return;
+    
+    const canvas = await html2canvas(reportRef.current, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#f8fafc"
+    });
+    
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    
+    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`CityPulse_Intelligence_Report_${timeframe}.pdf`);
+  };
+
+  if (!mounted) return null;
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900">
       <Navigation />
       
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-4xl font-bold text-foreground mb-2">Analytics Dashboard</h1>
-              <p className="text-lg text-muted-foreground">
-                Data-driven insights for civic issue management and predictive analytics
-              </p>
+      <div ref={reportRef} className="max-w-[1600px] mx-auto px-6 py-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        {/* Top Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 space-y-4 md:space-y-0">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 mb-1">Intelligence Hub</h1>
+            <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Predictive modeling and real-time civic data analysis</p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-1.5 flex shadow-sm">
+              <button 
+                onClick={() => setTimeframe('week')}
+                className={`px-5 py-2 text-xs font-black rounded-xl transition-all ${timeframe === 'week' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Week
+              </button>
+              <button 
+                onClick={() => setTimeframe('month')}
+                className={`px-5 py-2 text-xs font-black rounded-xl transition-all ${timeframe === 'month' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Month
+              </button>
+              <button 
+                onClick={() => setTimeframe('year')}
+                className={`px-5 py-2 text-xs font-black rounded-xl transition-all ${timeframe === 'year' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Year
+              </button>
             </div>
-            <div className="flex space-x-2">
-              <Select defaultValue="30days">
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7days">Last 7 days</SelectItem>
-                  <SelectItem value="30days">Last 30 days</SelectItem>
-                  <SelectItem value="90days">Last 90 days</SelectItem>
-                  <SelectItem value="1year">Last year</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline">
-                <Download className="w-4 h-4 mr-2" />
-                Export Report
-              </Button>
-            </div>
+            <Button 
+                onClick={handleExportPDF}
+                className="bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black text-xs h-11 px-6 shadow-xl transition-all active:scale-95"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export Report
+            </Button>
           </div>
         </div>
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatsCard
-            title="Issue Resolution Rate"
-            value="78.4%"
-            change="+5.2%"
-            trend="up"
-            icon={TrendingUp}
-          />
-          <StatsCard
-            title="Avg Resolution Time"
-            value="3.2 days"
-            change="-18%"
-            trend="down"
-            icon={Clock}
-          />
-          <StatsCard
-            title="Citizen Satisfaction"
-            value="4.3/5"
-            change="+0.3"
-            trend="up"
-            icon={Users}
-          />
-          <StatsCard
-            title="Predictive Accuracy"
-            value="91.7%"
-            change="+2.1%"
-            trend="up"
-            icon={BarChart3}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Issues by Category */}
-          <Card className="bg-gradient-card border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <BarChart3 className="w-5 h-5 text-primary" />
-                <span>Issues by Category</span>
-              </CardTitle>
-              <CardDescription>Distribution of reported issues across different categories</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {mockChartData.issuesByCategory.map((item, index) => (
-                  <div key={item.category} className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div 
-                        className="w-4 h-4 rounded-full"
-                        style={{ 
-                          backgroundColor: `hsl(${217 + index * 30}, 91%, ${60 + index * 5}%)` 
-                        }}
-                      />
-                      <span className="text-sm font-medium">{item.category}</span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="w-32 bg-muted rounded-full h-2">
-                        <div 
-                          className="bg-primary h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${item.percentage}%` }}
-                        />
-                      </div>
-                      <span className="text-sm text-muted-foreground w-8">{item.count}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Monthly Trends */}
-          <Card className="bg-gradient-card border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <span>Monthly Trends</span>
-              </CardTitle>
-              <CardDescription>Reported vs Resolved issues over time</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {mockChartData.trendsData.map((item, index) => (
-                  <div key={item.month} className="flex items-center justify-between">
-                    <span className="text-sm font-medium w-12">{item.month}</span>
-                    <div className="flex-1 mx-4">
-                      <div className="flex space-x-1">
-                        <div className="flex-1 bg-muted rounded h-6 flex items-center relative">
-                          <div 
-                            className="bg-primary h-4 rounded mx-1 transition-all duration-300"
-                            style={{ width: `${(item.reported / 350) * 100}%` }}
-                          />
-                          <span className="absolute left-2 text-xs text-white">
-                            {item.reported}
-                          </span>
-                        </div>
-                        <div className="flex-1 bg-muted rounded h-6 flex items-center relative">
-                          <div 
-                            className="bg-success h-4 rounded mx-1 transition-all duration-300"
-                            style={{ width: `${(item.resolved / 350) * 100}%` }}
-                          />
-                          <span className="absolute left-2 text-xs text-white">
-                            {item.resolved}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div className="flex justify-center space-x-4 pt-4 border-t border-border">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-primary rounded" />
-                    <span className="text-xs text-muted-foreground">Reported</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-success rounded" />
-                    <span className="text-xs text-muted-foreground">Resolved</span>
-                  </div>
+        {/* Top Metrics Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {currentData.metrics.map((metric, i) => (
+            <Card key={i} className="bg-white border-none p-7 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
+              <div className="flex justify-between items-start mb-5 text-slate-900">
+                <div className={`${metric.bg} p-4 rounded-3xl`}>
+                  <metric.icon className={`w-6 h-6 ${metric.color}`} />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Predictive Analytics */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-gradient-card border-border/50">
-            <CardHeader>
-              <CardTitle>Hotspot Prediction</CardTitle>
-              <CardDescription>Areas likely to see increased issue reports</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-civic-urgent/10 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">Downtown District</p>
-                    <p className="text-xs text-muted-foreground">Infrastructure issues expected</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-civic-urgent">High Risk</p>
-                    <p className="text-xs text-muted-foreground">87% confidence</p>
-                  </div>
-                </div>
-                
-                <div className="flex justify-between items-center p-3 bg-civic-high/10 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">Park Avenue</p>
-                    <p className="text-xs text-muted-foreground">Utility maintenance needed</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-civic-high">Medium Risk</p>
-                    <p className="text-xs text-muted-foreground">72% confidence</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-card border-border/50">
-            <CardHeader>
-              <CardTitle>Resource Allocation</CardTitle>
-              <CardDescription>Recommended department resource distribution</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Public Works</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-20 bg-muted rounded-full h-2">
-                      <div className="bg-primary h-2 rounded-full w-4/5" />
-                    </div>
-                    <span className="text-sm font-medium">80%</span>
-                  </div>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Utilities</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-20 bg-muted rounded-full h-2">
-                      <div className="bg-primary h-2 rounded-full w-3/5" />
-                    </div>
-                    <span className="text-sm font-medium">60%</span>
-                  </div>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Safety</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-20 bg-muted rounded-full h-2">
-                      <div className="bg-primary h-2 rounded-full w-2/5" />
-                    </div>
-                    <span className="text-sm font-medium">40%</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-card border-border/50">
-            <CardHeader>
-              <CardTitle>AI Insights</CardTitle>
-              <CardDescription>Machine learning predictions and recommendations</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="p-3 bg-primary/10 rounded-lg">
-                  <p className="text-sm font-medium">Peak Reporting Hours</p>
-                  <p className="text-xs text-muted-foreground">9-11 AM and 5-7 PM show highest activity</p>
-                </div>
-                
-                <div className="p-3 bg-success/10 rounded-lg">
-                  <p className="text-sm font-medium">Resolution Efficiency</p>
-                  <p className="text-xs text-muted-foreground">Infrastructure issues resolve 23% faster on weekdays</p>
-                </div>
-                
-                <div className="p-3 bg-warning/10 rounded-lg">
-                  <p className="text-sm font-medium">Seasonal Pattern</p>
-                  <p className="text-xs text-muted-foreground">Weather-related reports increase by 45% in winter</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* NLP Analysis Results */}
-        <Card className="bg-gradient-card border-border/50">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertTriangle className="w-5 h-5 text-primary" />
-              <span>NLP Sentiment & Urgency Analysis</span>
-            </CardTitle>
-            <CardDescription>
-              Natural language processing results from citizen reports
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-success mb-2">72%</div>
-                <div className="text-sm text-muted-foreground">Positive Sentiment</div>
-                <div className="text-xs text-muted-foreground mt-1">Citizens satisfied with response times</div>
-              </div>
-              
-              <div className="text-center">
-                <div className="text-3xl font-bold text-warning mb-2">18%</div>
-                <div className="text-sm text-muted-foreground">Neutral Sentiment</div>
-                <div className="text-xs text-muted-foreground mt-1">Factual reporting without emotion</div>
-              </div>
-              
-              <div className="text-center">
-                <div className="text-3xl font-bold text-destructive mb-2">10%</div>
-                <div className="text-sm text-muted-foreground">Negative Sentiment</div>
-                <div className="text-xs text-muted-foreground mt-1">Frustrated with delayed responses</div>
-              </div>
-            </div>
-            
-            <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-              <h4 className="font-medium mb-2">Common Keywords (This Week)</h4>
-              <div className="flex flex-wrap gap-2">
-                {["pothole", "streetlight", "traffic", "noise", "construction", "safety", "urgent", "dangerous"].map((keyword) => (
-                  <span key={keyword} className="px-2 py-1 bg-primary/20 text-primary text-xs rounded">
-                    {keyword}
+                <div className="text-right">
+                  <span className={`text-[10px] font-black ${metric.change.startsWith('+') ? 'text-emerald-600' : 'text-rose-600'} bg-slate-50 border border-slate-100 px-2 py-1 rounded-full`}>
+                    {metric.change}
                   </span>
+                </div>
+              </div>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] mb-1.5">{metric.title}</p>
+              <h3 className="text-4xl font-black text-slate-900 tabular-nums">{metric.value}</h3>
+              <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-slate-50 rounded-full blur-2xl group-hover:bg-blue-50 transition-all"></div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Main Grid Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Large Column */}
+          <div className="lg:col-span-8 space-y-8">
+            {/* Main Trend Chart */}
+            <Card className="bg-white border-none p-10 rounded-[3rem] shadow-sm shadow-slate-200 relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 space-y-4 sm:space-y-0 text-slate-900">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-1">Impact Volatility</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Live Performance Index</p>
+                </div>
+                <div className="flex space-x-8">
+                  <div className="flex items-center space-x-3 text-slate-900">
+                    <div className="w-4 h-4 rounded-full bg-blue-600 shadow-lg shadow-blue-200"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Reports</span>
+                  </div>
+                  <div className="flex items-center space-x-3 text-slate-900">
+                    <div className="w-4 h-4 rounded-full bg-cyan-500 shadow-lg shadow-cyan-200"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Resolved</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="h-[450px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={currentData.line}>
+                    <defs>
+                      <linearGradient id="colorIssues" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorResolved" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0891b2" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#0891b2" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 900 }} 
+                      dy={15}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 900 }} 
+                    />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: "#ffffff", border: "none", borderRadius: "24px", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.15)", padding: "20px" }}
+                      itemStyle={{ fontWeight: 900, fontSize: "14px" }}
+                    />
+                    <Area type="monotone" dataKey="issues" stroke="#2563eb" strokeWidth={5} fillOpacity={1} fill="url(#colorIssues)" />
+                    <Area type="monotone" dataKey="resolved" stroke="#0891b2" strokeWidth={5} fillOpacity={1} fill="url(#colorResolved)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            {/* Bottom Two Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-slate-900">
+              <Card className="bg-white border-none p-10 rounded-[3rem] shadow-sm">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-lg font-black uppercase tracking-[0.2em] text-slate-400">Sector Analysis</h3>
+                  <MoreHorizontal className="text-slate-300" />
+                </div>
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={70}
+                        outerRadius={110}
+                        paddingAngle={10}
+                        dataKey="value"
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="#fff" strokeWidth={5} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: "#ffffff", border: "none", borderRadius: "20px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="grid grid-cols-2 gap-y-4 gap-x-6 mt-6">
+                  {pieData.map((item, i) => (
+                    <div key={i} className="flex items-center space-x-3 bg-slate-50 p-3 rounded-2xl">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></div>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{item.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              <Card className="bg-white border-none p-10 rounded-[3rem] shadow-sm relative overflow-hidden group">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-lg font-black uppercase tracking-[0.2em] text-slate-400">City Hotspots</h3>
+                  <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-blue-600" />
+                  </div>
+                </div>
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={currentData.bar}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: "#94a3b8", fontSize: 10, fontWeight: 900 }} 
+                        dy={10}
+                      />
+                      <YAxis hide />
+                      <Tooltip 
+                        cursor={{ fill: "#f8fafc" }}
+                        contentStyle={{ backgroundColor: "#ffffff", border: "none", borderRadius: "20px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}
+                      />
+                      <Bar dataKey="count" fill="#3b82f6" radius={[12, 12, 12, 12]} barSize={25}>
+                        {currentData.bar.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#2563eb' : '#0891b2'} className="transition-all hover:opacity-80" />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-6 flex justify-center">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reports per District</p>
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* Right Sidebar Column */}
+          <div className="lg:col-span-4 space-y-8 text-slate-900">
+            <Card className="bg-gradient-to-br from-blue-700 to-blue-900 border-none p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+              <div className="absolute -right-16 -bottom-16 w-56 h-56 bg-white/10 rounded-full blur-3xl group-hover:scale-110 transition-all duration-1000"></div>
+              <Activity className="w-12 h-12 mb-8 text-blue-200" />
+              <h3 className="text-3xl font-black mb-3">Citizen Voice</h3>
+              <p className="text-blue-100 text-sm font-bold mb-10 leading-relaxed opacity-80">
+                AI sentiment analysis reveals an 94% positivity increase in urban infrastructure feedback.
+              </p>
+              <div className="space-y-6">
+                {[
+                  { label: "Stability", value: 92, color: "bg-emerald-400" },
+                  { label: "Community", value: 78, color: "bg-blue-400" },
+                  { label: "Urgency", value: 34, color: "bg-orange-400" },
+                ].map((item, i) => (
+                  <div key={i} className="bg-white/10 rounded-[2rem] p-5 backdrop-blur-md border border-white/5">
+                    <div className="flex justify-between text-[11px] font-black uppercase tracking-[0.25em] mb-3">
+                      <span>{item.label}</span>
+                      <span>{item.value}%</span>
+                    </div>
+                    <div className="w-full bg-black/20 h-2.5 rounded-full overflow-hidden">
+                      <div className={`${item.color} h-full rounded-full transition-all duration-1000`} style={{ width: mounted ? `${item.value}%` : '0%' }}></div>
+                    </div>
+                  </div>
                 ))}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </Card>
+
+            <Card className="bg-white border-none p-10 rounded-[3rem] shadow-sm flex flex-col">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-lg font-black uppercase tracking-[0.2em] text-slate-400">Live Activity</h3>
+                <div className="flex items-center space-x-2">
+                    <div className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping"></div>
+                    <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Reality</span>
+                </div>
+              </div>
+              <div className="space-y-8 flex-1">
+                {[
+                  { title: "Grid Restoration", time: "2m ago", loc: "Gokak Central", type: "Utility", color: "bg-blue-600" },
+                  { title: "Roadwork Update", time: "18m ago", loc: "Park Circle", type: "Roads", color: "bg-orange-500" },
+                  { title: "Sanitation Logic", time: "42m ago", loc: "Bengaluru West", type: "Health", color: "bg-emerald-500" },
+                  { title: "Safety Protocol", time: "1h ago", loc: "Old Delhi", type: "Police", color: "bg-indigo-600" },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center space-x-5 group cursor-pointer">
+                    <div className={`w-12 h-12 rounded-2xl ${item.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-all duration-300`}>
+                        <MessageSquare className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-black text-slate-800 truncate leading-none mb-1.5">{item.title}</h4>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+                        <MapPin className="w-3 h-3 mr-1" />
+                        {item.loc} • {item.time}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+             
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
