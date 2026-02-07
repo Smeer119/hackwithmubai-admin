@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, useRef } from "react";
+
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Navigation from "@/components/Navigation";
-import IssuesList from "@/components/IssuesList";
-import IssueDetailModal from "@/components/IssueDetailModal";
+import { 
+  User, Mail, Phone, Building2, ShieldCheck, 
+  Camera, LogOut, ArrowLeft, CheckCircle2 
+} from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface ProfileData {
   email?: string | null;
@@ -19,25 +23,38 @@ interface ProfileData {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const queryClient = useQueryClient();
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [userIssues, setUserIssues] = useState<any[]>([]);
-  const [loadingIssues, setLoadingIssues] = useState<boolean>(true);
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
+  const { data: profile, isLoading } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData.user?.id;
+      if (!uid) throw new Error("Not authenticated");
+      
+      const { data } = await supabase
+        .from("profiles")
+        .select("email,name,phone,avatar_url,organization_name,role,is_complete")
+        .eq("id", uid)
+        .maybeSingle();
+      
+      return data as ProfileData;
+    },
+    staleTime: Infinity, // Keep the data fresh indefinitely once loaded
+    gcTime: 1000 * 60 * 60 * 24, // Cache for 24 hours
+  });
   
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
+      queryClient.clear(); // Clear cache on logout
       navigate("/signin");
     } catch (e) {
       console.error("Logout error", e);
     }
   };
-
-  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleAvatarChange = async (file?: File) => {
     try {
@@ -58,9 +75,12 @@ export default function Profile() {
       const { data: pub } = supabase.storage.from('profile_photos').getPublicUrl(filePath);
       const publicUrl = pub.publicUrl;
       if (!publicUrl) throw new Error('Failed to get public URL for avatar');
+      
       const { error: updateErr } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', uid);
       if (updateErr) throw updateErr;
-      setProfile((prev) => ({ ...(prev || {}), avatar_url: publicUrl }));
+      
+      // Update cache manually
+      queryClient.setQueryData(["profile"], (old: any) => ({ ...old, avatar_url: publicUrl }));
     } catch (e: any) {
       console.error('Avatar upload error', e);
       alert(e?.message || 'Failed to upload avatar');
@@ -69,147 +89,135 @@ export default function Profile() {
     }
   };
 
-  useEffect(() => {
-    const load = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id;
-      if (!uid) {
-        navigate("/signin");
-        return;
-      }
-      const { data } = await supabase.from("profiles").select("email,name,phone,avatar_url,organization_name,role,is_complete").eq("id", uid).maybeSingle();
-      setProfile(data || null);
-      setLoading(false);
-
-      // Load user issues (reported by this user)
-      setLoadingIssues(true);
-      const { data: issuesData, error } = await supabase
-        .from("issues")
-        .select("id, title, description, category, location_text, priority, status, created_at, reporter_name, photos, reporter_id")
-        .eq("reporter_id", uid)
-        .order("created_at", { ascending: false });
-      if (error) {
-        console.error("Failed to load user issues", error);
-        setUserIssues([]);
-      } else {
-        const mapped = (issuesData || []).map((row: any) => ({
-          id: row.id,
-          title: row.title,
-          category: row.category || "Other",
-          status: (row.priority || "low") as "urgent" | "high" | "medium" | "low",
-          location: row.location_text || "",
-          description: row.description || "",
-          urgencyScore: row.priority === "urgent" ? 90 : row.priority === "high" ? 75 : row.priority === "medium" ? 50 : 25,
-          createdAt: row.created_at,
-          reportedBy: row.reporter_name || "You",
-          photos: Array.isArray(row.photos) ? row.photos : (row.photos ? [row.photos] : []),
-        }));
-        setUserIssues(mapped);
-      }
-      setLoadingIssues(false);
-    };
-    load();
-  }, [navigate]);
-
-  if (loading) return <div className="min-h-screen p-6">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center space-y-4">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Accessing Profile Data...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans">
       <Navigation />
-      <div className="container mx-auto px-4 py-8">
-        <Card className="max-w-2xl mx-auto bg-gradient-card border-border/50">
-          <CardHeader>
-            <CardTitle>Your Profile</CardTitle>
-            <CardDescription>View your account details</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-              {profile?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatar_url} alt="avatar" className="w-16 h-16 rounded-full object-cover" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-secondary" />
-              )}
-              <div>
-                <div className="text-lg font-semibold">{profile?.name || "Unnamed"}</div>
-                <div className="text-sm text-muted-foreground">{profile?.email}</div>
-                <div className="mt-2">
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="user"
-                    className="hidden"
-                    onChange={(e) => handleAvatarChange(e.target.files?.[0])}
-                    disabled={uploadingAvatar}
-                  />
-                  <Button type="button" size="sm" disabled={uploadingAvatar} onClick={() => avatarInputRef.current?.click()}>
-                    {uploadingAvatar ? 'Uploading…' : 'Change Avatar'}
-                  </Button>
+      
+      <div className="max-w-[1000px] mx-auto px-6 py-20">
+        <div className="flex items-center justify-between mb-12">
+          <div>
+            <h1 className="text-4xl font-black uppercase italic tracking-tight text-slate-900 leading-none mb-3">
+              Account <span className="text-blue-600">Profile</span>
+            </h1>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Control Center // v2.0</p>
+          </div>
+          <Button variant="outline" className="rounded-full px-6 border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 text-xs font-black uppercase tracking-widest transition-all shadow-sm" asChild>
+            <Link to="/dashboard">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Return
+            </Link>
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Identity Card */}
+          <Card className="lg:col-span-12 bg-white border-none p-10 rounded-[3rem] shadow-sm flex flex-col md:flex-row items-center md:items-start gap-10">
+            <div className="relative group">
+              <div className="w-40 h-40 rounded-3xl overflow-hidden bg-slate-100 shadow-xl border-4 border-white">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <User className="w-16 h-16 text-slate-300" />
+                  </div>
+                )}
+              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleAvatarChange(e.target.files?.[0])}
+                disabled={uploadingAvatar}
+              />
+              <button 
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-3 rounded-2xl shadow-lg shadow-blue-200 hover:scale-110 transition-transform disabled:opacity-50"
+              >
+                <Camera className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 text-center md:text-left">
+              <div className="inline-flex items-center space-x-2 bg-blue-50 px-4 py-1.5 rounded-full mb-4">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">{profile?.role || "Administrator"}</span>
+              </div>
+              <h2 className="text-4xl font-black text-slate-900 mb-2">{profile?.name || "Access Denied"}</h2>
+              <p className="text-slate-400 font-bold mb-8">{profile?.email}</p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100">
+                  <div className="flex items-center space-x-3 text-slate-400 mb-2">
+                    <Phone className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Contact Contact</span>
+                  </div>
+                  <p className="font-bold text-slate-800">{profile?.phone || "Disconnected"}</p>
+                </div>
+                <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100">
+                  <div className="flex items-center space-x-3 text-slate-400 mb-2">
+                    <Building2 className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Organization</span>
+                  </div>
+                  <p className="font-bold text-slate-800">{profile?.organization_name || "Independent Operative"}</p>
                 </div>
               </div>
             </div>
+          </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs text-muted-foreground">Role</div>
-                <div className="font-medium capitalize">{profile?.role || "user"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Phone</div>
-                <div className="font-medium">{profile?.phone || "—"}</div>
-              </div>
-              <div className="md:col-span-2">
-                <div className="text-xs text-muted-foreground">Organization</div>
-                <div className="font-medium">{profile?.organization_name || "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Profile Status</div>
-                <div className="font-medium">{profile?.is_complete ? "Complete" : "Incomplete"}</div>
-              </div>
-            </div>
+          {/* Settings & Actions */}
+          <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <Card className="bg-white border-none p-10 rounded-[3rem] shadow-sm">
+                <h3 className="text-lg font-black uppercase italic mb-6">Security Settings</h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center p-5 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                    <div className="flex items-center space-x-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <span className="text-sm font-bold text-emerald-900 uppercase tracking-tight">Active session</span>
+                    </div>
+                    <span className="text-[10px] font-black text-emerald-600 uppercase">Verified</span>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4 mt-8">
+                  <Button className="flex-1 bg-slate-900 hover:bg-slate-800 text-white rounded-[1.5rem] py-8 text-xs font-black uppercase tracking-widest" asChild>
+                    <Link to="/profile-complete">Edit Profile</Link>
+                  </Button>
+                  <Button 
+                    onClick={handleLogout}
+                    variant="outline" 
+                    className="flex-1 border-2 border-rose-50 text-rose-600 hover:bg-rose-50 hover:border-rose-100 rounded-[1.5rem] py-8 text-xs font-black uppercase tracking-widest"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Terminate Session
+                  </Button>
+                </div>
+            </Card>
 
-            <div className="flex gap-2 pt-2">
-              <Link to="/profile-complete">
-                <Button variant="default">Edit Profile</Button>
-              </Link>
-              <Link to="/dashboard">
-                <Button variant="outline">Back to Dashboard</Button>
-              </Link>
-              <Button variant="destructive" onClick={handleLogout}>Log out</Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Your Issues */}
-        <Card className="max-w-4xl mx-auto bg-gradient-card border-border/50 mt-6">
-          <CardHeader>
-            <CardTitle>Your Issues</CardTitle>
-            <CardDescription>
-              {loadingIssues ? "Loading your issues..." : `${userIssues.length} issue${userIssues.length === 1 ? '' : 's'} submitted`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingIssues ? (
-              <div className="text-muted-foreground">Loading…</div>
-            ) : (
-              <IssuesList
-                issues={userIssues}
-                onIssueClick={(issue: any) => { setSelectedIssue(issue); setIsDetailModalOpen(true); }}
-                selectedIssueId={selectedIssue?.id || null}
-                onMapHighlight={() => {}}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Detail Modal */}
-        <IssueDetailModal
-          issue={selectedIssue}
-          isOpen={isDetailModalOpen}
-          onClose={() => { setIsDetailModalOpen(false); setSelectedIssue(null); }}
-          isAdmin={false}
-        />
+            <Card className="bg-gradient-to-br from-blue-700 to-blue-900 border-none p-10 rounded-[3rem] text-white overflow-hidden relative shadow-2xl">
+              <div className="absolute top-0 right-0 p-10 opacity-10">
+                <ShieldCheck className="w-40 h-40 text-white" />
+              </div>
+              <h3 className="text-lg font-black uppercase italic mb-6">System Access</h3>
+              <p className="text-blue-100 text-sm font-medium mb-10 leading-relaxed max-w-[280px]">
+                Your account is currently active with full administrative privileges in the CityPulse OS.
+              </p>
+              <div className="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/5">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Protocol Secured</span>
+              </div>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

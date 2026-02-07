@@ -100,7 +100,7 @@ const Navigation = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex items-center space-x-2"
+                  className="flex items-center space-x-2 border-white/20 text-white hover:bg-white/10 hover:text-white transition-all shadow-sm"
                   asChild
                 >
                   <Link to="/profile">
