@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function ProfileComplete() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [role, setRole] = useState<"user" | "admin">("user");
@@ -112,7 +114,11 @@ export default function ProfileComplete() {
     if (finalAvatarUrl) setAvatarUrl(finalAvatarUrl);
     setAvatarFile(null);
     setAvatarPreview("");
-    navigate("/dashboard");
+    
+    // Invalidate profile query to ensure fresh data on the Profile page
+    queryClient.invalidateQueries({ queryKey: ["profile"] });
+    
+    navigate("/profile");
   };
 
   const autofillLocation = () => {
