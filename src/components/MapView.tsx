@@ -310,18 +310,21 @@ const MapView = ({
         </MapContainer>
 
         {/* Floating Legend */}
-        <div className="absolute bottom-6 right-6 z-[400] bg-white/90 backdrop-blur-sm dark:bg-gray-900/90 rounded-xl shadow-lg p-4 border border-border/50 space-y-3">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Priority Level</h4>
-            <div className="space-y-2">
+        <div className="absolute bottom-6 right-6 z-[400] bg-white/95 backdrop-blur-md dark:bg-gray-900/95 rounded-xl shadow-2xl p-5 border border-border/50 space-y-4 min-w-[160px]">
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Priority Legend</h4>
+            <div className="space-y-3">
                 {[
-                    { label: 'Urgent', color: 'bg-red-500' },
-                    { label: 'High', color: 'bg-orange-500' },
-                    { label: 'Medium', color: 'bg-yellow-500' },
-                    { label: 'Low', color: 'bg-green-500' }
+                    { label: 'Urgent', color: 'bg-red-500', text: 'Critical Action' },
+                    { label: 'High', color: 'bg-orange-500', text: 'High Priority' },
+                    { label: 'Medium', color: 'bg-yellow-500', text: 'Standard' },
+                    { label: 'Low', color: 'bg-green-500', text: 'Low / Routine' }
                 ].map((item) => (
-                    <div key={item.label} className="flex items-center space-x-3">
-                        <div className={`w-3 h-3 rounded-full ${item.color} shadow-sm`} />
-                        <span className="text-xs font-medium">{item.label}</span>
+                    <div key={item.label} className="flex items-center group cursor-default">
+                        <div className={`w-3.5 h-3.5 rounded-full ${item.color} shadow-lg mr-3 outline outline-2 outline-white dark:outline-gray-800`} />
+                        <div className="flex flex-col">
+                            <span className="text-xs font-black text-gray-800 dark:text-gray-100">{item.label}</span>
+                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tight">{item.text}</span>
+                        </div>
                     </div>
                 ))}
             </div>

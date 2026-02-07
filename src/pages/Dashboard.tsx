@@ -8,7 +8,7 @@ import IssuesList from "@/components/IssuesList";
 import MapView from "@/components/MapView";
 import StatusBadge from "@/components/StatusBadge";
 import MobileFilterDrawer from "@/components/MobileFilterDrawer";
-import { AlertTriangle, TrendingUp, Users, Clock, Map, List, Menu, X } from "lucide-react";
+import { AlertTriangle, TrendingUp, Users, Clock, Map, List, Menu, X, MapPin } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { supabase } from "@/lib/supabaseClient"; // Make sure this points to your supabase client
@@ -86,6 +86,33 @@ const Dashboard = () => {
 
   const handleMapHighlight = (issueId: number) => {
     setHighlightedIssueId(issueId);
+  };
+
+  const handleStatusUpdate = async (issueId: number, newPriority: string) => {
+    const { error } = await supabase
+      .from("issues")
+      .update({ priority: newPriority })
+      .eq("id", issueId);
+
+    if (error) {
+      console.error("Failed to update status", error);
+    } else {
+      // Update local state
+      setIssues(prev => prev.map(issue => 
+        issue.id === issueId ? { 
+          ...issue, 
+          status: newPriority, 
+          urgencyScore: newPriority === "urgent" ? 90 : newPriority === "high" ? 75 : newPriority === "medium" ? 50 : 25 
+        } : issue
+      ));
+      if (selectedIssue?.id === issueId) {
+        setSelectedIssue((prev: any) => ({ 
+          ...prev, 
+          status: newPriority,
+          urgencyScore: newPriority === "urgent" ? 90 : newPriority === "high" ? 75 : newPriority === "medium" ? 50 : 25
+        }));
+      }
+    }
   };
 
   const handleFilterChange = (newFilters: any) => {
@@ -251,7 +278,7 @@ const Dashboard = () => {
         <div className="w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
           <div className="p-4 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">City Issues</h2>
+              <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">City Issues</h2>
               <Button variant="outline" size="sm" onClick={handleExportPDF}>
                 Export
               </Button>
@@ -304,13 +331,20 @@ const Dashboard = () => {
                     {issue.title.charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-sm truncate">{issue.title}</p>
-                      <span className="text-xs text-gray-500 ml-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <p className={`font-black text-sm truncate ${
+                        highlightedIssueId === issue.id ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'
+                      }`}>
+                        {issue.title}
+                      </p>
+                      <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 ml-2 whitespace-nowrap bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
                         {new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 truncate">{issue.location}</p>
+                    <p className="text-[11px] font-bold text-gray-600 dark:text-gray-300 truncate flex items-center mt-1">
+                      <MapPin className="w-3.5 h-3.5 mr-1 text-blue-500" />
+                      {issue.location}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -345,93 +379,119 @@ const Dashboard = () => {
               <div className="p-6 pt-10">
                 
                 <div className="flex flex-col items-center mb-6">
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3 shadow-lg ${
-                    selectedIssue.status === 'urgent' ? 'bg-gradient-to-br from-red-500 to-red-600' :
-                    selectedIssue.status === 'high' ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
-                    selectedIssue.status === 'medium' ? 'bg-gradient-to-br from-yellow-400 to-yellow-500' :
-                    'bg-gradient-to-br from-green-500 to-green-600'
-                  }`}>
-                    {selectedIssue.title.charAt(0)}
-                  </div>
-                  <h3 className="text-lg font-bold text-center leading-tight mb-1">{selectedIssue.title}</h3>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">{selectedIssue.category}</p>
+                  {selectedIssue.photos && selectedIssue.photos.length > 0 ? (
+                    <div className="w-full h-40 rounded-xl overflow-hidden mb-4 shadow-md bg-muted">
+                      <img 
+                        src={selectedIssue.photos[0]} 
+                        alt={selectedIssue.title} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3 shadow-lg ${
+                      selectedIssue.status === 'urgent' ? 'bg-gradient-to-br from-red-500 to-red-600' :
+                      selectedIssue.status === 'high' ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
+                      selectedIssue.status === 'medium' ? 'bg-gradient-to-br from-yellow-400 to-yellow-500' :
+                      'bg-gradient-to-br from-green-500 to-green-600'
+                    }`}>
+                      {selectedIssue.title.charAt(0)}
+                    </div>
+                  )}
+                  <h3 className="text-xl font-bold text-center leading-tight mb-1 text-gray-900 dark:text-white">{selectedIssue.title}</h3>
+                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-[0.2em]">{selectedIssue.category}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mb-6">
-                  <div className="text-center p-3 bg-secondary/30 rounded-lg">
+                  <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/30 rounded-2xl border border-blue-100 dark:border-blue-800/50 shadow-sm">
                     <div className="flex items-center justify-center mb-2">
-                      <AlertTriangle className="w-4 h-4 text-blue-500" />
+                      <div className="p-1.5 bg-blue-500 rounded-lg">
+                        <AlertTriangle className="w-4 h-4 text-white" />
+                      </div>
                     </div>
-                    <p className="text-xl font-bold">{selectedIssue.urgencyScore}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">Urgency</p>
+                    <p className="text-2xl font-black text-blue-700 dark:text-blue-400">{selectedIssue.urgencyScore}</p>
+                    <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase">Urgency</p>
                   </div>
-                  <div className="text-center p-3 bg-secondary/30 rounded-lg">
+                  <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/30 rounded-2xl border border-orange-100 dark:border-orange-800/50 shadow-sm">
                     <div className="flex items-center justify-center mb-2">
-                      <Clock className="w-4 h-4 text-orange-500" />
+                      <div className="p-1.5 bg-orange-500 rounded-lg">
+                        <Clock className="w-4 h-4 text-white" />
+                      </div>
                     </div>
-                    <p className="text-xl font-bold">
+                    <p className="text-2xl font-black text-orange-700 dark:text-orange-400">
                       {Math.floor((new Date().getTime() - new Date(selectedIssue.createdAt).getTime()) / (1000 * 60 * 60))}h
                     </p>
-                    <p className="text-[10px] text-muted-foreground uppercase">Active Time</p>
+                    <p className="text-[10px] text-orange-600 dark:text-orange-400 font-bold uppercase">Active</p>
                   </div>
                 </div>
 
-                <div className="mb-6 p-4 bg-secondary/20 rounded-lg border border-border/50">
-                  <h4 className="text-xs font-semibold mb-3 uppercase tracking-wider text-muted-foreground">Activity Timeline</h4>
-                  <div className="flex items-center space-x-1 mb-2">
-                    <div className="flex-1 bg-blue-500 h-1.5 rounded-full opacity-80"></div>
-                    <div className="flex-1 bg-cyan-400 h-1.5 rounded-full"></div>
-                    <div className="flex-1 bg-yellow-400 h-1.5 rounded-full opacity-60"></div>
+                <div className="mb-6 p-5 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-inner">
+                  <h4 className="text-[11px] font-black mb-4 uppercase tracking-[0.15em] text-gray-400">Activity Timeline</h4>
+                  <div className="flex items-center space-x-2 mb-3">
+                    <div className="flex-[2] bg-gradient-to-r from-blue-600 to-blue-400 h-2.5 rounded-full shadow-sm"></div>
+                    <div className="flex-1 bg-gradient-to-r from-cyan-400 to-cyan-300 h-2.5 rounded-full shadow-sm"></div>
+                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 h-2.5 rounded-full"></div>
                   </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>Reported</span>
-                    <span>In Progress</span>
-                    <span>Now</span>
+                  <div className="flex justify-between text-[10px] font-bold text-gray-500">
+                    <span className="text-blue-600">Reported</span>
+                    <span className="text-cyan-500">In Progress</span>
+                    <span>Pending</span>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <Map className="w-4 h-4 text-muted-foreground mt-0.5" />
+                <div className="space-y-5 px-1">
+                  <div className="flex items-start space-x-4">
+                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                      <Map className="w-4 h-4 text-gray-500" />
+                    </div>
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Location</p>
-                      <p className="text-sm font-medium">{selectedIssue.location}</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Location</p>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{selectedIssue.location}</p>
                     </div>
                   </div>
                   
-                  <div className="flex items-start space-x-3">
-                    <List className="w-4 h-4 text-muted-foreground mt-0.5" />
+                  <div className="flex items-start space-x-4">
+                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                      <List className="w-4 h-4 text-gray-500" />
+                    </div>
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Description</p>
-                      <p className="text-sm text-balance text-muted-foreground/90">{selectedIssue.description}</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Description</p>
+                      <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">{selectedIssue.description}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start space-x-3">
-                    <Users className="w-4 h-4 text-muted-foreground mt-0.5" />
+                  <div className="flex items-start space-x-4">
+                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                      <Users className="w-4 h-4 text-gray-500" />
+                    </div>
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Reported By</p>
-                      <p className="text-sm">{selectedIssue.reportedBy}</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Reported By</p>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{selectedIssue.reportedBy}</p>
                     </div>
                   </div>
                   
-                  <div className="flex items-start space-x-3">
-                    <div className="w-4 h-4 flex items-center justify-center mt-0.5">
-                      <span className="block w-2 h-2 rounded-full bg-current text-muted-foreground"></span>
+                  <div className="flex items-start space-x-4">
+                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                      <AlertTriangle className="w-4 h-4 text-gray-500" />
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Status</p>
-                      <StatusBadge status={selectedIssue.status} />
+                    <div className="flex-1">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Impact Level</p>
+                      <Select 
+                        value={selectedIssue.status} 
+                        onValueChange={(val) => handleStatusUpdate(selectedIssue.id, val)}
+                      >
+                        <SelectTrigger className="w-full h-9 border-0 bg-gray-50 dark:bg-gray-800 focus:ring-1 focus:ring-blue-500 shadow-sm font-bold text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="urgent">🔴 Urgent</SelectItem>
+                          <SelectItem value="high">🟠 High</SelectItem>
+                          <SelectItem value="medium">🟡 Medium</SelectItem>
+                          <SelectItem value="low">🟢 Low</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
-
-                <Button 
-                  className="w-full mt-6 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg transition-all hover:scale-[1.02]" 
-                  onClick={() => setIsDetailModalOpen(true)}
-                >
-                  View Full Report
-                </Button>
               </div>
             </div>
           )}

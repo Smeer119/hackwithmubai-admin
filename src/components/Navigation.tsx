@@ -32,7 +32,7 @@ const Navigation = () => {
   }, []);
 
   return (
-    <nav className="bg-background/95 backdrop-blur-md border-b border-border sticky top-0 z-50">
+    <nav className="bg-gradient-to-r from-gray-900 via-[#0a192f] to-[#112240] backdrop-blur-md border-b border-white/10 sticky top-0 z-50 shadow-lg">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -40,8 +40,8 @@ const Navigation = () => {
               <AlertTriangle className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">CityPulse</h1>
-              <p className="text-sm text-muted-foreground">Real-time Civic Dashboard</p>
+                <h1 className="text-xl font-bold text-white tracking-tight">CityPulse</h1>
+                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest leading-none">Real-time Civic Dashboard</p>
             </div>
           </div>
 
@@ -57,8 +57,8 @@ const Navigation = () => {
                   size="sm"
                   className={`flex items-center space-x-2 transition-all duration-300 ${
                     isActive 
-                      ? "bg-primary text-primary-foreground shadow-glow" 
-                      : "hover:bg-secondary"
+                      ? "bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]" 
+                      : "text-gray-300 hover:bg-white/10 hover:text-white"
                   }`}
                   asChild
                 >
