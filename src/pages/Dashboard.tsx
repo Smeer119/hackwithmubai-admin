@@ -6,8 +6,10 @@ import IssueDetailModal from "@/components/IssueDetailModal";
 import FilterSidebar from "@/components/FilterSidebar";
 import IssuesList from "@/components/IssuesList";
 import MapView from "@/components/MapView";
+import StatusBadge from "@/components/StatusBadge";
 import MobileFilterDrawer from "@/components/MobileFilterDrawer";
-import { AlertTriangle, TrendingUp, Users, Clock, Map, List, Menu } from "lucide-react";
+import { AlertTriangle, TrendingUp, Users, Clock, Map, List, Menu, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { supabase } from "@/lib/supabaseClient"; // Make sure this points to your supabase client
 
@@ -21,6 +23,7 @@ const Dashboard = () => {
     status: "all",
     location: "all", 
     dateRange: "all",
+    city: "all",
   });
   const [viewMode, setViewMode] = useState<"list" | "map">("list"); // Mobile view toggle
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -58,6 +61,11 @@ const Dashboard = () => {
     loadIssues();
   }, []);
 
+  const uniqueCities = Array.from(new Set(issues.map(issue => {
+    const parts = (issue.location || "").split(',');
+    return parts[parts.length - 1].trim();
+  }))).filter(Boolean).sort();
+
   const filteredIssues = issues.filter((issue) => {
     const searchMatch = filters.search === "" || 
       issue.title.toLowerCase().includes(filters.search.toLowerCase()) ||
@@ -66,8 +74,9 @@ const Dashboard = () => {
     const categoryMatch = filters.category === "all" || issue.category === filters.category;
     const statusMatch = filters.status === "all" || issue.status === filters.status;
     const locationMatch = filters.location === "all" || issue.location.includes(filters.location);
+    const cityMatch = filters.city === "all" || issue.location.toLowerCase().includes(filters.city.toLowerCase());
     
-    return searchMatch && categoryMatch && statusMatch && locationMatch;
+    return searchMatch && categoryMatch && statusMatch && locationMatch && cityMatch;
   });
 
   const handleIssueClick = (issue: any) => {
@@ -237,116 +246,193 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      <div className="container mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">Civic Issues Dashboard</h1>
-              <p className="text-muted-foreground">
-                Real-time monitoring and intelligent prioritization of city issues
-              </p>
-            </div>
-            
-            {/* Mobile Controls */}
-            <div className="flex items-center space-x-2 sm:hidden">
-              <MobileFilterDrawer 
-                onFilterChange={handleFilterChange} 
-                activeFilterCount={activeFilterCount}
-              />
-              <Button 
-                variant="outline" 
-                onClick={() => setViewMode(viewMode === "list" ? "map" : "list")}
-              >
-                {viewMode === "list" ? <Map className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
-                {viewMode === "list" ? "Map" : "List"}
+      <div className="flex h-[calc(100vh-80px)] overflow-hidden">
+        {/* Left Sidebar - Issues List */}
+        <div className="w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">City Issues</h2>
+              <Button variant="outline" size="sm" onClick={handleExportPDF}>
+                Export
               </Button>
             </div>
-          </div>
-        </div>
-
-        
-       
-
-        {/* Main Content - Desktop Layout */}
-        <div className={`hidden lg:grid lg:grid-cols-12 gap-6 h-[calc(100vh-280px)]`}>
-          {/* Left Sidebar - Filters */}
-          <div className={`${sidebarCollapsed ? 'lg:col-span-1' : 'lg:col-span-3'} transition-all duration-300`}>
-            {!sidebarCollapsed && (
-              <div className="h-full overflow-y-auto">
-                <FilterSidebar onFilterChange={handleFilterChange} />
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="mt-2 w-full"
-            >
-              <Menu className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {/* Middle - Issues List */}
-          <div className={`${sidebarCollapsed ? 'lg:col-span-5' : 'lg:col-span-4'} transition-all duration-300`}>
-            <div className="h-full overflow-hidden flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-foreground">
-                  {loadingIssues ? "Loading Issues..." : `Issues (${filteredIssues.length})`}
-                </h2>
-                <Button variant="outline" size="sm" onClick={handleExportPDF}>
-                  Export
-                </Button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto">
-                <IssuesList 
-                  issues={filteredIssues}
-                  onIssueClick={handleIssueClick}
-                  onMapHighlight={handleMapHighlight}
-                  selectedIssueId={highlightedIssueId}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Right - Map */}
-          <div className={`${sidebarCollapsed ? 'lg:col-span-6' : 'lg:col-span-5'} transition-all duration-300`}>
-            <MapView 
-              issues={filteredIssues}
-              onIssueSelect={handleIssueClick}
-              highlightedIssueId={highlightedIssueId}
+            <input
+              type="text"
+              placeholder="Filter Issues"
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm mb-3"
             />
+            
+            <Select 
+              value={filters.city} 
+              onValueChange={(value) => setFilters({ ...filters, city: value })}
+            >
+              <SelectTrigger className="w-full h-9 text-sm">
+                <SelectValue placeholder="Filter by City" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Cities</SelectItem>
+                {uniqueCities.map(city => (
+                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="divide-y divide-gray-200 dark:divide-gray-800">
+            {filteredIssues.map((issue) => (
+              <div
+                key={issue.id}
+                onClick={() => {
+                  setSelectedIssue(issue);
+                  setHighlightedIssueId(issue.id);
+                }}
+                className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                  highlightedIssueId === issue.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                }`}
+              >
+                <div className="flex items-start space-x-3">
+                  <div 
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                      issue.status === 'urgent' ? 'bg-red-500' :
+                      issue.status === 'high' ? 'bg-orange-500' :
+                      issue.status === 'medium' ? 'bg-yellow-500' :
+                      'bg-green-500'
+                    }`}
+                  >
+                    {issue.title.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-sm truncate">{issue.title}</p>
+                      <span className="text-xs text-gray-500 ml-2">
+                        {new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 truncate">{issue.location}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Mobile Layout */}
-        <div className="lg:hidden">
-          {viewMode === "list" ? (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-foreground">
-                  Issues ({filteredIssues.length})
-                </h2>
-                <Button variant="outline" size="sm" onClick={handleExportPDF}>
-                  Export
+        {/* Center - Map */}
+        <div className="flex-1 relative h-full">
+          <MapView 
+            issues={filteredIssues}
+            onIssueSelect={(issue) => {
+              setSelectedIssue(issue);
+              setHighlightedIssueId(issue.id);
+            }}
+            highlightedIssueId={highlightedIssueId}
+          />
+          
+          {/* Right Floating Panel - Issue Details */}
+          {selectedIssue && (
+            <div className="absolute top-4 right-4 bottom-4 w-80 bg-white/95 backdrop-blur-md dark:bg-gray-900/95 rounded-xl shadow-2xl border border-border/50 overflow-y-auto z-[500] animate-in slide-in-from-right-10 duration-300">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20 z-10" 
+                onClick={() => setSelectedIssue(null)}
+              >
+                <span className="sr-only">Close</span>
+                <X className="h-4 w-4" />
+              </Button>
+              
+              <div className="p-6 pt-10">
+                
+                <div className="flex flex-col items-center mb-6">
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3 shadow-lg ${
+                    selectedIssue.status === 'urgent' ? 'bg-gradient-to-br from-red-500 to-red-600' :
+                    selectedIssue.status === 'high' ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
+                    selectedIssue.status === 'medium' ? 'bg-gradient-to-br from-yellow-400 to-yellow-500' :
+                    'bg-gradient-to-br from-green-500 to-green-600'
+                  }`}>
+                    {selectedIssue.title.charAt(0)}
+                  </div>
+                  <h3 className="text-lg font-bold text-center leading-tight mb-1">{selectedIssue.title}</h3>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">{selectedIssue.category}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="text-center p-3 bg-secondary/30 rounded-lg">
+                    <div className="flex items-center justify-center mb-2">
+                      <AlertTriangle className="w-4 h-4 text-blue-500" />
+                    </div>
+                    <p className="text-xl font-bold">{selectedIssue.urgencyScore}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase">Urgency</p>
+                  </div>
+                  <div className="text-center p-3 bg-secondary/30 rounded-lg">
+                    <div className="flex items-center justify-center mb-2">
+                      <Clock className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <p className="text-xl font-bold">
+                      {Math.floor((new Date().getTime() - new Date(selectedIssue.createdAt).getTime()) / (1000 * 60 * 60))}h
+                    </p>
+                    <p className="text-[10px] text-muted-foreground uppercase">Active Time</p>
+                  </div>
+                </div>
+
+                <div className="mb-6 p-4 bg-secondary/20 rounded-lg border border-border/50">
+                  <h4 className="text-xs font-semibold mb-3 uppercase tracking-wider text-muted-foreground">Activity Timeline</h4>
+                  <div className="flex items-center space-x-1 mb-2">
+                    <div className="flex-1 bg-blue-500 h-1.5 rounded-full opacity-80"></div>
+                    <div className="flex-1 bg-cyan-400 h-1.5 rounded-full"></div>
+                    <div className="flex-1 bg-yellow-400 h-1.5 rounded-full opacity-60"></div>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Reported</span>
+                    <span>In Progress</span>
+                    <span>Now</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-start space-x-3">
+                    <Map className="w-4 h-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Location</p>
+                      <p className="text-sm font-medium">{selectedIssue.location}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3">
+                    <List className="w-4 h-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Description</p>
+                      <p className="text-sm text-balance text-muted-foreground/90">{selectedIssue.description}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <Users className="w-4 h-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Reported By</p>
+                      <p className="text-sm">{selectedIssue.reportedBy}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3">
+                    <div className="w-4 h-4 flex items-center justify-center mt-0.5">
+                      <span className="block w-2 h-2 rounded-full bg-current text-muted-foreground"></span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">Status</p>
+                      <StatusBadge status={selectedIssue.status} />
+                    </div>
+                  </div>
+                </div>
+
+                <Button 
+                  className="w-full mt-6 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white shadow-lg transition-all hover:scale-[1.02]" 
+                  onClick={() => setIsDetailModalOpen(true)}
+                >
+                  View Full Report
                 </Button>
               </div>
-              
-              <IssuesList 
-                issues={filteredIssues}
-                onIssueClick={handleIssueClick}
-                onMapHighlight={handleMapHighlight}
-                selectedIssueId={highlightedIssueId}
-              />
-            </div>
-          ) : (
-            <div className="h-[70vh]">
-              <MapView 
-                issues={filteredIssues}
-                onIssueSelect={handleIssueClick}
-                highlightedIssueId={highlightedIssueId}
-              />
             </div>
           )}
         </div>
@@ -357,7 +443,6 @@ const Dashboard = () => {
           isOpen={isDetailModalOpen}
           onClose={() => {
             setIsDetailModalOpen(false);
-            setSelectedIssue(null);
           }}
           isAdmin={false} // TODO: Connect to auth system
         />
